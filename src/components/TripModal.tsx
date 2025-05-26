@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../contexts/TripContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,18 +8,71 @@ interface TripModalProps {
   onClose: () => void;
 }
 
+interface PlaceSuggestion {
+  description: string;
+  place_id: string;
+}
+
 const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
   const { createTrip } = useTrip();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
   const [tripName, setTripName] = useState('');
-  const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [stops, setStops] = useState<string[]>([]);
   const [newStop, setNewStop] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+
+  useEffect(() => {
+    // Get current location when component mounts
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          setError('Unable to get your current location. Please enable location services.');
+        }
+      );
+    }
+  }, []);
+
+  // Mock function to simulate getting place suggestions
+  const getPlaceSuggestions = async (input: string) => {
+    if (!input.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
+    // In a real app, this would call the Google Places API
+    // For now, we'll simulate some suggestions
+    const mockSuggestions = [
+      { description: `${input}, New York, USA`, place_id: '1' },
+      { description: `${input}, California, USA`, place_id: '2' },
+      { description: `${input}, Texas, USA`, place_id: '3' },
+    ];
+    
+    setSuggestions(mockSuggestions);
+  };
+
+  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDestination(value);
+    getPlaceSuggestions(value);
+  };
+
+  const handleSuggestionClick = (suggestion: PlaceSuggestion) => {
+    setDestination(suggestion.description);
+    setSuggestions([]);
+  };
 
   const handleAddStop = () => {
     if (newStop.trim()) {
@@ -35,8 +88,8 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!tripName || !origin || !destination) {
-      setError('Please fill in all required fields');
+    if (!tripName || !destination || !currentLocation) {
+      setError('Please fill in all required fields and ensure location services are enabled');
       return;
     }
     
@@ -45,7 +98,7 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
     
     try {
       // In a real app, we would use Google Maps API to get coordinates
-      // Here we're using mock coordinates
+      // Here we're using mock coordinates for destination
       const mockCoordinates = (place: string) => ({
         lat: 37.7749 + Math.random() * 5,
         lng: -122.4194 + Math.random() * 5
@@ -60,8 +113,8 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
       const tripData = {
         name: tripName,
         origin: {
-          name: origin,
-          location: mockCoordinates(origin)
+          name: 'Current Location',
+          location: currentLocation
         },
         destination: {
           name: destination,
@@ -112,23 +165,8 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
               id="tripName"
               value={tripName}
               onChange={(e) => setTripName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-black focus:border-black"
               placeholder="e.g., Summer Road Trip 2025"
-              required
-            />
-          </div>
-          
-          <div className="mb-6">
-            <label htmlFor="origin" className="block text-sm font-medium text-gray-700 mb-1">
-              Origin
-            </label>
-            <input
-              type="text"
-              id="origin"
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., San Francisco, CA"
               required
             />
           </div>
@@ -137,15 +175,31 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
             <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-1">
               Destination
             </label>
-            <input
-              type="text"
-              id="destination"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Los Angeles, CA"
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                id="destination"
+                value={destination}
+                onChange={handleDestinationChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-black focus:border-black"
+                placeholder="e.g., Los Angeles, CA"
+                required
+              />
+              {suggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.place_id}
+                      type="button"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
+                    >
+                      {suggestion.description}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="mb-6">
@@ -174,13 +228,13 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
                 type="text"
                 value={newStop}
                 onChange={(e) => setNewStop(e.target.value)}
-                className="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
+                className="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-black focus:border-black"
                 placeholder="Add a stop"
               />
               <button
                 type="button"
                 onClick={handleAddStop}
-                className="px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 bg-black text-white rounded-r-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black"
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -198,7 +252,7 @@ const TripModal: React.FC<TripModalProps> = ({ onClose }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black ${
                 isLoading ? 'opacity-70 cursor-not-allowed' : ''
               }`}
             >
